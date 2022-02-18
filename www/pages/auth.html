@@ -59,14 +59,14 @@
   }
 </style>
 <script>
-  export default function (props, {$f7, $router, $update }) {
+  export default function (props, {$f7, $f7router, $update }) {
     // NCMBが初期化されているかチェックします
     if (typeof ncmb === 'undefined') throw 'NCMBが初期化されていません';
     // ログイン状態を取得して処理分けします
     const currentUser = ncmb.User.getCurrentUser();
     if (currentUser) {
       // すでにログインしている場合は戻るなど
-      // $router.back(); // 戻る場合
+      // $f7router.back(); // 戻る場合
       return;
     }
     let viewType = 'signup'; // 表示分け用
@@ -106,7 +106,7 @@
         // ログイン処理
         await ncmb.User.loginWithMailAddress(email, password);
         app.dialog.alert('ログインしました', 'ログイン成功');
-        // $router.back(); // 戻る場合
+        // $f7router.back(); // 戻る場合
       } catch (e) {
         // エラーの場合はログインエラー
         app.dialog.alert('メールアドレスとパスワードを確認してください', 'ログインエラー');
