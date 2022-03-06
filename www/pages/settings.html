@@ -1,0 +1,261 @@
+<template>
+  <div class="page">
+    <div class="navbar">
+      <div class="navbar-bg"></div>
+      <div class="navbar-inner sliding">
+        <div class="title">設定</div>
+      </div>
+    </div>
+    <div class="page-content">
+      <form class="profile">
+				<div class="block-title">公開情報</div>
+        <div class="list">
+          <ul>
+            <li class="item-content item-input">
+              <div class="item-inner">
+                <div class="item-title item-label"></div>
+                <div class="item-input-wrap">
+                  <input type="text" name="displayName" placeholder="ユーザー名" value="${profile.displayName}" data-public="1" />
+                </div>
+              </div>
+            </li>
+            <li class="item-content item-input">
+              <div class="item-inner">
+                <div class="item-title item-label"></div>
+                <div class="item-input-wrap">
+									<textarea class="resizable" name="profile" data-public="1">${profile.profile}</textarea>
+                </div>
+              </div>
+            </li>
+            <li class="item-content item-input">
+              <div class="item-inner">
+                <div class="item-title item-label">写真</div>
+                <div class="item-input-wrap">
+									${ image ?
+										$h`<img class="profileImage" src=${image} @click=${openFilePicker} />`
+										:
+										$h`<i class="f7-icons size-150" @click=${openFilePicker}>person_alt_circle</i>`
+									}
+                  <span style="display: none;">
+                    <input type="file" name="photo" data-public="1" accept="image/*" @change=${selectPhoto} />
+                  </span>
+                </div>
+              </div>
+            </li>
+					</ul>
+					<div class="block-title">非公開情報</div>
+					<ul>
+            <li class="item-content item-input">
+              <div class="item-inner">
+                <div class="item-title item-label">誕生日</div>
+                <div class="item-input-wrap">
+                  <input type="date" name="birthDate" placeholder="2013-09-01" value="${currentUser.birthDate}" />
+                </div>
+              </div>
+            </li>
+            <li>
+              <div class="block-title">メールマガジン受信</div>
+              <label class="item-radio item-radio-icon-start item-content">
+								${currentUser.mailMagagine ?
+									$h`<input type="radio" name="mailMagagine" value="true" checked="checked" />`
+								:
+									$h`<input type="radio" name="mailMagagine" value="true" />`
+								}
+                <i class="icon icon-radio"></i>
+                <div class="item-inner">
+                  <div class="item-title">する</div>
+                </div>
+              </label>
+              <label class="item-radio item-radio-icon-start item-content">
+								${currentUser.mailMagagine ?
+									$h`<input type="radio" name="mailMagagine" value="false" />`
+								:
+									$h`<input type="radio" name="mailMagagine" value="false" checked="checked" />`
+								}
+                <i class="icon icon-radio"></i>
+                <div class="item-inner">
+                  <div class="item-title">しない</div>
+                </div>
+              </label>
+            </li>
+            <li>
+              <a href="#" class="button button-large" @click=${save}>保存する</a>
+            </li>
+          </ul>
+        </div>
+      </form>
+    </div>
+  </div>
+</template>
+<style>
+  .size-150 {
+    font-size: 150px;
+  }
+	.profileImage {
+		object-fit: cover;
+		width: 145px;
+		height: 145px;
+		border-radius: 50%;
+		border: 1px #efeff4 solid;
+	}
+</style>
+<script>
+  export default function (props, {$f7, $f7router, $update, $onMounted, $on, $tick }) {
+    // NCMBが初期化されているかチェックします
+    if (typeof ncmb === 'undefined') throw 'NCMBが初期化されていません';
+		const currentUser = ncmb.User.getCurrentUser();
+		const Profile = ncmb.DataStore('Profile');
+		let profile = new Profile;
+		let image;
+
+		// 日付型部分の変換処理（必要に応じて）
+		if (currentUser.birthDate) {
+			const d = new Date(currentUser.birthDate);
+			currentUser.birthDate = `${d.getFullYear()}-${( '00' + (d.getMonth() + 1)).slice(-2)}-${( '00' + d.getDate()).slice(-2)}`;
+		}
+
+		$onMounted(async () => {
+			if (currentUser.profile) {
+				// 公開情報（プロフィール）の取得
+				profile = await Profile
+					.equalTo('objectId', currentUser.profile.objectId)
+					.fetch();
+				if (!profile.objectId) profile = new Profile;
+				// 写真のダウンロードと設定（必要に応じて）
+				downloadPhoto();
+				// 表示を更新と、更新待ち
+				$update();
+				await $tick();
+				// テキストエリアの高さを調整
+				$('textarea.resizable').trigger('change');
+			}
+		});
+
+		// 保存処理用
+		const save = async () => {
+			try {
+				// プロフィールとユーザーオブジェクトにフォーム入力値をセット
+				setFormValues($('form.profile')[0]);
+				// プロフィールのACLをセット
+				profile
+					.set('acl', getAcl());
+				// プロフィールを更新
+				await (profile.objectId ? profile.update() : profile.save());
+				// ユーザにプロフィールをセット
+				currentUser.set('profile', {
+					__type: 'Pointer',
+					className: 'Profile',
+					objectId: profile.objectId,
+				});
+				// ユーザー情報を更新
+				currentUser.objectId ? currentUser.update() : currentUser.save();
+				// 保存完了を通知
+				showToast('保存しました');
+			} catch (e) {
+				// 何らかのエラーが出た場合
+				showToast(`エラー: ${e.message}`);
+			}
+		};
+
+		// トースト表示用関数
+		const showToast = (text) => {
+			$f7.toast.create({
+				text,
+				position: 'top',
+				closeTimeout: 2000,
+			}).open();
+		}
+
+		// 初期表示時にプロフィール画像をダウンロードする関数
+		// 不要であればdownloadPhotoの呼び出しをコメントアウトしてください
+		const downloadPhoto = async () => {
+			// ファイル名がなければ実行しない
+			if (!profile.photo) return;
+			// Blobデータをダウンロード
+			const blob = await ncmb.File.download(profile.photo, 'blob');
+			// blobをdataURIに変換
+			image = await loadPhoto(blob);
+			// 表示更新
+			$update();
+		};
+
+    // ファイル選択ダイアログを開く
+    const openFilePicker = (e) => {
+      $(e.target).parents('div').find('[type="file"]').click();
+    };
+
+		// 写真を選択した後の処理
+		const selectPhoto = async (e) => {
+			image = await loadPhoto(e.target.files[0]);
+			$update();
+		};
+
+		// フォームのデータをユーザー、プロフィールオブジェクトにセットする関数
+		const setFormValues = (form) => {
+			Array.prototype.slice.call(form.elements).forEach(ele => {
+				const { name } = ele;
+				const public = !!$(ele).data('public');
+				let value;
+				switch (ele.type) {
+				case 'text': // テキストの場合
+				case 'textarea': // テキストエリアの場合
+					value = ele.value;
+					break;
+				case 'number': // 数値の場合
+					if (ele.value !== '') {
+						value = parseFloat(ele.value);
+					}
+					break;
+				case 'date': // 日付の場合
+					if (ele.value !== '') {
+						value = new Date(ele.value);
+					}
+					break;
+				case 'radio': // ラジオの場合
+					if (ele.checked) {
+						value = ele.value === 'true';
+					}
+					break;
+				case 'file': // ファイルの場合
+					const file = ele.files[0];
+					if (!file) break;
+					// 拡張子を取得
+					const ext = file.name.replace(/.*\.(.*)$/, "$1");
+					// ランダムな文字列を作成
+					const random = Math.random().toString(32).substring(2);
+					// ファイル名を作成
+					const fileName = `${currentUser.objectId}-${(new Date).getTime()}-${random}.${ext}`;
+					// アップロードを実行
+					ncmb.File.upload(fileName, file, getAcl());
+					value = fileName;
+					break;
+				}
+				// valueがあれば、公開情報 → プロフィールに、非公開情報 → ユーザーにセット
+				if (typeof value !== 'undefined') {
+					public ? profile.set(name, value) : currentUser.set(name, value);
+				}
+			});
+		}
+
+		// 選択した写真を読み込む関数
+		const loadPhoto = (file) => {
+			return new Promise((res, rej) => {
+				const reader = new FileReader;
+				reader.addEventListener("load", () => {
+					res(reader.result);
+				}, false);
+				reader.readAsDataURL(file);
+			});
+		};
+
+		// ACLを生成する関数
+		const getAcl = () => {
+      const acl = new ncmb.Acl;
+      const user = ncmb.User.getCurrentUser();
+			return acl
+				.setPublicReadAccess(true)
+        .setUserWriteAccess(user, true);
+    };
+		return $render;
+  }
+</script>

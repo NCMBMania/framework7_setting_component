@@ -64,11 +64,13 @@
     if (typeof ncmb === 'undefined') throw 'NCMBが初期化されていません';
     // ログイン状態を取得して処理分けします
     const currentUser = ncmb.User.getCurrentUser();
+    /*
     if (currentUser) {
       // すでにログインしている場合は戻るなど
       // $f7router.back(); // 戻る場合
       return;
     }
+    */
     let viewType = 'signup'; // 表示分け用
     // 表示を切り替える関数
     const changeView = (type) => {
@@ -105,8 +107,8 @@
       try {
         // ログイン処理
         await ncmb.User.loginWithMailAddress(email, password);
-        app.dialog.alert('ログインしました', 'ログイン成功');
-        // $f7router.back(); // 戻る場合
+        // app.dialog.alert('ログインしました', 'ログイン成功');
+        $f7router.navigate('/settings');
       } catch (e) {
         // エラーの場合はログインエラー
         app.dialog.alert('メールアドレスとパスワードを確認してください', 'ログインエラー');
